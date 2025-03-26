@@ -295,8 +295,44 @@ class AstAnalyzer:
                 - passed (bool): Ob die Bedingung erfüllt wurde
                 - details (str): Details zum Ergebnis
         """
-        # Grundgerüst für die benutzerdefinierte Bedingungsprüfung
-        return False, "Custom check not implemented yet"
+        custom_code = parameters.get('code')
+        if not custom_code:
+            return False, "No custom code provided"
+        
+        try:
+            # Erstelle ein Namespace mit dem AST und den notwendigen Modulen
+            namespace = {
+                'tree': tree,
+                'ast': ast,
+                'parameters': parameters
+            }
+            
+            # Führe den benutzerdefinierten Code aus
+            exec(custom_code, namespace)
+            
+            # Prüfe, ob der Code ein Ergebnis zurückgegeben hat
+            if 'result' not in namespace:
+                return False, "Custom code did not set a 'result' variable"
+            
+            result = namespace['result']
+            
+            # Prüfe, ob das Ergebnis ein Tupel mit zwei Elementen ist
+            if not isinstance(result, tuple) or len(result) != 2:
+                return False, "Custom code must return a tuple (passed, details)"
+            
+            passed, details = result
+            
+            # Prüfe, ob das erste Element ein Boolean ist
+            if not isinstance(passed, bool):
+                return False, "First element of result must be a boolean"
+            
+            # Prüfe, ob das zweite Element ein String ist
+            if not isinstance(details, str):
+                return False, "Second element of result must be a string"
+            
+            return passed, details
+        except Exception as e:
+            return False, f"Error executing custom code: {str(e)}"
 
 
 if __name__ == "__main__":
