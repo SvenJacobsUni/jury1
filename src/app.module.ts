@@ -8,12 +8,13 @@ import { IoModule } from './io/io.module';
 import { PythonExecutionModule } from './python-execution/python-execution.module';
 import { JavaExecutionModule } from './java-execution/java-execution.module';
 import { CppExecutionModule } from './cpp-execution/cpp-execution.module';
+import { AstConditionModule } from './ast-condition/ast-condition.module';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
 import 'winston-daily-rotate-file';
 
 @Module({
-  imports: [ConfigModule.forRoot(), JavaSanitizerModule, PythonSanitizerModule, IoModule, PythonExecutionModule, JavaExecutionModule, CppExecutionModule,
+  imports: [ConfigModule.forRoot(), JavaSanitizerModule, PythonSanitizerModule, IoModule, PythonExecutionModule, JavaExecutionModule, CppExecutionModule, AstConditionModule,
   WinstonModule.forRoot({
     level: process.env.LOG_LEVEL || 'warn',
     format: winston.format.combine(

@@ -7,6 +7,8 @@ import { tmpdir } from 'os';
 import * as fs from 'fs';
 import { PythonSanitizerService } from '../python-sanitizer/python-sanitizer.service';
 import { IoService } from '../io/io.service';
+import { AstConditionService } from '../ast-condition/ast-condition.service';
+import { AstConditionDto, AstAnalysisResultDto } from '../ast-condition/dto';
 
 /**
  * @class PythonExecutionService - Service that handles the execution of code
@@ -37,6 +39,7 @@ export class PythonExecutionService {
     constructor(
         private readonly ioService: IoService,
         private readonly pythonSanitizerService: PythonSanitizerService,
+        private readonly astConditionService: AstConditionService,
     ) { }
 
     /**
@@ -184,7 +187,21 @@ export class PythonExecutionService {
      * @throws { Error } - If the input is not valid base64 encoded
      * @throws { Error } - If the code is not safe to execute
      */
-    async runPythonAssignment(mainFile: Record<string, string>, additionalFiles: Record<string, string>, testFiles: Record<string, string>, runMethod?: string, input?: string): Promise<{ output: string, testResults: JSON, testsPassed: boolean, score: number }> {
+    async runPythonAssignment(
+        mainFile: Record<string, string>, 
+        additionalFiles: Record<string, string>, 
+        testFiles: Record<string, string>, 
+        astConditions?: AstConditionDto[],
+        runMethod?: string, 
+        input?: string
+    ): Promise<{ 
+        output: string, 
+        testResults: JSON, 
+        testsPassed: boolean, 
+        score: number,
+        astResults?: AstAnalysisResultDto,
+        astConditionsPassed?: boolean
+    }> {
         // Create a unique temporary directory for this execution
         const executionId = uuidv4();
         const tempDir = join(tmpdir(), 'jury1', executionId);
@@ -198,6 +215,16 @@ export class PythonExecutionService {
 
         // Decode and save test files
         await this.ioService.handleFileOperations(tempDir, testFiles);
+
+        // AST-Bedingungen validieren und speichern
+        let hasAstConditions = false;
+        if (astConditions && astConditions.length > 0) {
+            this.astConditionService.validateConditions(astConditions);
+            const astConditionsJson = this.astConditionService.serializeConditions(astConditions);
+            const astConditionsPath = join(tempDir, 'ast-conditions.json');
+            writeFileSync(astConditionsPath, astConditionsJson);
+            hasAstConditions = true;
+        }
 
         let container: Docker.Container;
 
@@ -222,10 +249,9 @@ export class PythonExecutionService {
             Image: this.pythonUnittestImage,
             // Runs the program & tests discovered by unittest
             Cmd: ['sh', '-c', `
-                ${cmd},
-                python /custom-test-runner/json_test_runner.py &> /dev/null &&
-                (exit 0) ||
-                (exit 1)
+                ${cmd};
+                python /custom-test-runner/json_test_runner.py &> /dev/null;
+                ${hasAstConditions ? `python /custom-ast-analyzer/python_ast_analyzer.py /usr/src/app/${Object.keys(mainFile)[0]} /usr/src/app/ast-conditions.json /usr/src/app/ast-results.json` : ''}
             `],
             WorkingDir: '/usr/src/app',
             Tty: false,
@@ -265,7 +291,34 @@ export class PythonExecutionService {
             // Calculate score as a percentage
             score = totalTests > 0 ? (passedTests / totalTests) * 100 : 0;
 
-            return { output: output, testResults: jsonResults, testsPassed, score };
+            // AST-Analyseergebnisse lesen
+            let astResults: AstAnalysisResultDto | undefined;
+            let astConditionsPassed = true;
+
+            if (hasAstConditions) {
+                const astResultsPath = `${tempDir}/ast-results.json`;
+                if (fs.existsSync(astResultsPath)) {
+                    const astResultsJson = fs.readFileSync(astResultsPath, 'utf8');
+                    astResults = this.astConditionService.deserializeResults(astResultsJson);
+                    astConditionsPassed = astResults.passed;
+                }
+            }
+
+            // Gesamtpunktzahl berechnen
+            let finalScore = score;
+            if (astResults) {
+                // Gewichteter Durchschnitt aus Tests und AST-Bedingungen
+                finalScore = (score + astResults.score) / 2;
+            }
+
+            return { 
+                output: output, 
+                testResults: jsonResults, 
+                testsPassed, 
+                score: finalScore,
+                astResults,
+                astConditionsPassed
+            };
         } finally {
             // Cleanup: Stop and remove the container, and delete the temp directory
             await this.ioService.stopAndRemoveContainer(container);

@@ -1,6 +1,7 @@
 import { Controller, Post, Body, Query, ParseBoolPipe, DefaultValuePipe, BadRequestException, Inject, Logger } from '@nestjs/common';
 import { PythonExecutionService } from './python-execution.service';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { AstConditionDto, AstAnalysisResultDto } from '../ast-condition/dto';
 
 /**
  * @class PythonExecutionController - Controller that handles the execution of code
@@ -88,18 +89,53 @@ export class PythonExecutionController {
      */
     @Post('/python-assignment')
     async executePythonAssignment(
-        @Body() body: { mainFile: Record<string, string>; additionalFiles: Record<string, string>, testFiles: Record<string, string>, runMethod?: string, input?: string },
-    ): Promise<{ output: string, testResults: JSON, testsPassed: boolean, score: number } | BadRequestException> {
-        let output: { output: string, testResults: JSON; testsPassed: boolean, score: number };
+        @Body() body: { 
+            mainFile: Record<string, string>; 
+            additionalFiles: Record<string, string>, 
+            testFiles: Record<string, string>, 
+            astConditions?: AstConditionDto[],
+            runMethod?: string, 
+            input?: string 
+        },
+    ): Promise<{ 
+        output: string, 
+        testResults: JSON, 
+        testsPassed: boolean, 
+        score: number,
+        astResults?: AstAnalysisResultDto,
+        astConditionsPassed?: boolean
+    } | BadRequestException> {
+        let output: { 
+            output: string, 
+            testResults: JSON; 
+            testsPassed: boolean, 
+            score: number,
+            astResults?: AstAnalysisResultDto,
+            astConditionsPassed?: boolean
+        };
 
         try {
-            output = await this.pythonExecutionService.runPythonAssignment(body.mainFile, body.additionalFiles, body.testFiles, body.runMethod, body.input);
+            output = await this.pythonExecutionService.runPythonAssignment(
+                body.mainFile, 
+                body.additionalFiles, 
+                body.testFiles, 
+                body.astConditions,
+                body.runMethod, 
+                body.input
+            );
         }
         catch (error) {
             throw new BadRequestException(error.message);
         }
 
         this.logger.debug("output: ", output);
-        return { output: output.output, testResults: output.testResults, testsPassed: output.testsPassed, score: output.score };
+        return { 
+            output: output.output, 
+            testResults: output.testResults, 
+            testsPassed: output.testsPassed, 
+            score: output.score,
+            astResults: output.astResults,
+            astConditionsPassed: output.astConditionsPassed
+        };
     }
 }
