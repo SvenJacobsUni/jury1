@@ -58,7 +58,7 @@ export class CppExecutionService {
 
         const containerOptions: Docker.ContainerCreateOptions = {
             Image: this.cppImage,
-            Cmd: ['sh', '-c', `g++ -o main main.cpp && ./main`],
+            Cmd: ['sh', '-c', `g++ -o main main.cpp; ./main`],
             WorkingDir: '/usr/src/app',
             Tty: false,
             HostConfig: {
@@ -111,7 +111,7 @@ export class CppExecutionService {
             }
         }
 
-        cmd += ` && ./main`;
+        cmd += `; ./main`;
         if (input) {
             const inputFilePath = join(tempDir, 'input.txt');
             writeFileSync(inputFilePath, input);
@@ -187,10 +187,10 @@ export class CppExecutionService {
         let runProgramCmd = `./program > program_output.txt 2>&1`;
 
         // Command to compile and run the test file with doctest
-        let testCmd = `g++ -o test test.cpp 2> test_compile_errors.txt && ./test -r json`;
+        let testCmd = `g++ -o test test.cpp 2> test_compile_errors.txt; ./test -r json`;
 
         // Combined command
-        let cmd = `${compileCmd} && ${runProgramCmd} && ${testCmd}`;
+        let cmd = `${compileCmd}; ${runProgramCmd}; ${testCmd}`;
 
         let container: Docker.Container;
 
